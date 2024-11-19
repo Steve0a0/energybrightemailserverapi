@@ -1,7 +1,10 @@
-const express = require('express');
-const bodyParser = require('body-parser');
+// Import required modules
+require('dotenv').config(); // Load environment variables from .env file
+const express = require("express");
+// const nodemailer = require("nodemailer");
+const cors = require("cors");
+// const axios = require('axios');
 const admin = require('firebase-admin');
-const crypto = require('crypto');
 
 const app = express();
 app.use(bodyParser.json());
