@@ -1,59 +1,39 @@
-const express = require("express");
-const nodemailer = require("nodemailer");
-const cors = require("cors");
+const express = require('express');
+const bodyParser = require('body-parser');
+const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 const app = express();
-app.use(express.json()); // Middleware to parse JSON request bodies
-app.use(cors()); // Enable CORS for all routes
+app.use(bodyParser.json());
 
-
-// Nodemailer configuration
-const transporter = nodemailer.createTransport({
-    service: "gmail", // or your preferred email service provider
-    auth: {
-        user: "stephenangelo4@gmail.com",
-        pass: "wvve vhmj jpyc ozap" // Use an app-specific password if using Gmail
-    }
+// Initialize Firebase Admin SDK
+const serviceAccount = require('./path-to-your-service-account-key.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
 });
 
-// API route to accept the quote and send emails
-app.post("/api/accept-quote", (req, res) => {
-  const { customerEmail, handymanEmail, handymanName, quoteAmount } = req.body;
+const db = admin.firestore();
 
-  console.log("Request Body:", req.body);  // Log to check incoming data
-  console.log("Customer Email:", customerEmail);  // Verify customer email specifically
+// Webhook Endpoint
+app.post('/paypal-webhook', (req, res) => {
+  const webhookEvent = req.body;
 
-  // Mail options
-  const mailOptionsCustomer = {
-      from: "stephenangelo4@gmail.com",
-      to: customerEmail,
-      subject: "Quote Accepted - Booking Confirmation",
-      text: `Hello,\n\nYour quote for ${handymanName} has been accepted for ${quoteAmount} EUR. You are now booked for the requested service.\n\nThank you!`
-  };
+  if (webhookEvent.event_type === 'PAYMENT.SALE.COMPLETED') {
+    const quoteId = webhookEvent.resource.custom; // Extract custom field (quoteId)
+    updateQuoteStatus(quoteId, 'Payment Complete');
+  }
 
-  const mailOptionsHandyman = {
-      from: "stephenangelo4@gmail.com",
-      to: handymanEmail,
-      subject: "New Booking Confirmation",
-      text: `Hello ${handymanName},\n\nYour quote for ${quoteAmount} EUR has been accepted by the customer. Please proceed with the necessary arrangements.\n\nThank you!`
-  };
-
-  Promise.all([
-      transporter.sendMail(mailOptionsCustomer),
-      transporter.sendMail(mailOptionsHandyman)
-  ])
-  .then(() => {
-      console.log("Emails sent successfully.");
-      res.status(200).send("Emails sent successfully.");
-  })
-  .catch((error) => {
-      console.error("Error sending emails:", error);
-      res.status(500).send("Error sending emails.");
-  });
+  res.status(200).send('Webhook processed successfully.');
 });
 
-// Start the Express server
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+async function updateQuoteStatus(quoteId, status) {
+  try {
+    const quoteDocRef = db.collection('quotes').doc(quoteId);
+    await quoteDocRef.update({ status });
+    console.log(`Quote ${quoteId} updated to status: ${status}`);
+  } catch (error) {
+    console.error('Error updating quote status:', error);
+  }
+}
+
+app.listen(3000, () => console.log('Server running on port 3000'));
